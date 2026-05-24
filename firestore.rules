@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isTuniEmail() {
+      return isSignedIn()
+        && request.auth.token.email.matches('.*@tuni\\.fi$');
+    }
+
+    // SET YOUR ADMIN EMAIL HERE (must match ADMIN_EMAIL in index.html)
+    function isAdmin() {
+      return isTuniEmail()
+        && request.auth.token.email == 'your.name@tuni.fi';
+    }
+
+    function validTeam(team) {
+      return team in ['Tampere', 'Pori', 'Seinäjoki'];
+    }
+
+    function userTeam() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team;
+    }
+
+    match /users/{userId} {
+      allow read: if isTuniEmail();
+      allow create: if isTuniEmail()
+        && request.auth.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && validTeam(request.resource.data.team)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 40;
+      allow update, delete: if false;
+    }
+
+    match /rides/{markId} {
+      allow read: if isTuniEmail();
+      allow create: if isTuniEmail()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && validTeam(request.resource.data.team)
+        && request.resource.data.rideId is string
+        && request.resource.data.rideName is string
+        && request.resource.data.points is int
+        && request.resource.data.points > 0
+        && request.resource.data.points <= 20
+        && markId == request.auth.uid + '_' + request.resource.data.rideId
+        && !exists(/databases/$(database)/documents/rides/$(markId));
+      allow delete: if isAdmin()
+        || (isTuniEmail() && resource.data.userId == request.auth.uid);
+      allow update: if false;
+    }
+
+    // One dare claim per team. Document id: {team}_{dareId}
+    match /dares/{dareId} {
+      allow read: if isTuniEmail();
+      allow create: if isTuniEmail()
+        && validTeam(request.resource.data.team)
+        && request.resource.data.team == userTeam()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.dareId is string
+        && request.resource.data.dareName is string
+        && request.resource.data.proof is string
+        && request.resource.data.proof.size() >= 10
+        && request.resource.data.proof.size() <= 500
+        && request.resource.data.points is int
+        && request.resource.data.points > 0
+        && request.resource.data.points <= 30
+        && dareId == request.resource.data.team + '_' + request.resource.data.dareId
+        && !exists(/databases/$(database)/documents/dares/$(dareId));
+      allow delete: if isAdmin()
+        || (isTuniEmail() && resource.data.userId == request.auth.uid);
+      allow update: if false;
+    }
+  }
+}

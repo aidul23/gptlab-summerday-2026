@@ -1,0 +1,16 @@
+# Secrets — never commit these
+.env
+.env.*
+*.pem
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
